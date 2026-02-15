@@ -155,18 +155,25 @@ class TinyRecursiveARC(nn.Module):
         y = self.y_init.expand(B, -1, -1)
         z = self.z_init.expand(B, -1, -1)
         
+        predictions = []
         # Recursion steps
         for _ in range(self.T):
             y, z = self.latent_recursion(x, y, z)
             
-        logits = self.color_head(y)
-        pred_size = torch.sigmoid(self.size_head(z.mean(dim=1))) * 30.0
-        return logits, pred_size
+            # Deep Supervision: Predict at each step
+            logits = self.color_head(y)
+            pred_size = torch.sigmoid(self.size_head(z.mean(dim=1))) * 30.0
+            predictions.append((logits, pred_size))
+
+        return predictions
 
     def hard_predict(self, grids):
         self.eval()
         with torch.no_grad():
-            logits, pred_size = self.forward(grids)
+            predictions = self.forward(grids)
+            # Take the final prediction
+            logits, pred_size = predictions[-1]
+
             color_preds = torch.argmax(logits, dim=-1).view(-1, 30, 30)
             preds = []
             for i in range(grids.shape[0]):

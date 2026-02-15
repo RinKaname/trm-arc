@@ -3,7 +3,7 @@ import torch.nn as nn
 from architecture import TinyRecursiveARC
 
 def test_model_forward():
-    print("Testing TinyRecursiveARC Forward Pass...")
+    print("Testing TinyRecursiveARC Forward Pass with Deep Supervision...")
 
     # Initialize model with default parameters
     model = TinyRecursiveARC()
@@ -16,12 +16,22 @@ def test_model_forward():
     print(f"Dummy input shape: {dummy_input.shape}")
 
     try:
-        # Run forward pass
-        logits, pred_size = model(dummy_input)
+        # Run forward pass (now returns a list of predictions)
+        predictions = model(dummy_input)
 
         print("Forward pass successful.")
-        print(f"Logits shape: {logits.shape}")
-        print(f"Predicted size shape: {pred_size.shape}")
+        print(f"Number of recursion steps (T): {len(predictions)}")
+
+        # Verify length matches T
+        if len(predictions) != model.T:
+             print(f"ERROR: Expected {model.T} steps, got {len(predictions)}")
+        else:
+             print("SUCCESS: Output steps match configuration.")
+
+        # Check the last prediction
+        logits, pred_size = predictions[-1]
+        print(f"Final Logits shape: {logits.shape}")
+        print(f"Final Predicted size shape: {pred_size.shape}")
 
         # Check for NaNs
         if torch.isnan(logits).any() or torch.isnan(pred_size).any():
@@ -43,6 +53,12 @@ def test_model_forward():
             print("Predicted size shape matches expected.")
         else:
             print(f"Predicted size shape mismatch! Expected {expected_size_shape}, got {pred_size.shape}")
+
+        # Test hard_predict (which uses forward internally)
+        print("\nTesting hard_predict...")
+        preds = model.hard_predict(dummy_input)
+        print(f"hard_predict returned {len(preds)} predictions.")
+        print(f"Prediction 0 shape: {preds[0].shape}")
 
     except Exception as e:
         print(f"ERROR during forward pass: {e}")
