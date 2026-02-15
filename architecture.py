@@ -150,11 +150,39 @@ class TinyRecursiveARC(nn.Module):
 
     def forward(self, grids):
         B = grids.shape[0]
+        # Flatten grid: [B, H, W] -> [B, H*W]
+        flat_grids = grids.view(B, -1)
+        L = flat_grids.shape[1]
+
         # Only token embedding, no pos_emb added here (handled by RoPE in attention)
-        x = self.token_emb(grids.view(B, -1))
+        x = self.token_emb(flat_grids)
+
+        # If L != 900, we need to handle y_init and z_init
+        if L != 900:
+             # Option 1: Interpolate/Resample (complex)
+             # Option 2: Slice/Pad (simple)
+             # The model is trained on 30x30=900. If input is smaller, we should probably pad it to 30x30 BEFORE calling forward.
+             # However, dataset collate_fn pads to 30x30.
+             # Why is L != 900?
+             # Ah, hard_predict might be called with raw unpadded grids in eval script?
+             pass
+
         y = self.y_init.expand(B, -1, -1)
         z = self.z_init.expand(B, -1, -1)
         
+        # Match sequence length if needed (e.g. for variable size inference, though ARC is usually padded to 30x30)
+        if x.shape[1] != y.shape[1]:
+            # If x is smaller (e.g. 2x2 grid = 4 tokens), but y_init is 900.
+            # We must run on 900 tokens if we want to use the learned y_init/z_init directly?
+            # Or we should slice y_init?
+            # The paper TRM uses fixed size or padding.
+            # Let's assume we must pad input to 30x30 if it isn't already.
+            # But wait, RoPE handles variable length.
+            # If we allow variable length, y_init must be sliced.
+            if x.shape[1] < y.shape[1]:
+                 y = y[:, :x.shape[1], :]
+                 z = z[:, :x.shape[1], :]
+
         predictions = []
         # Recursion steps
         for _ in range(self.T):
