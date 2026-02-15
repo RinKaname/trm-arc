@@ -1,3 +1,9 @@
+import json
+import torch
+import random
+import os
+from torch.utils.data import Dataset, DataLoader
+
 # ===== 1. DATASET & UTILS =====
 class ARCDataset(Dataset):
     def __init__(self, challenges_path: str, solutions_path: str = None, augment: bool = True):
@@ -55,7 +61,47 @@ class ARCDataset(Dataset):
             
             inp = mapping[inp]
             out = mapping[out]
+
+        # 4. Random Translation (Shift with padding)
+        if random.random() > 0.5:
+            inp, out = self._random_translation(inp, out)
+
+        return inp, out
+
+    def _random_translation(self, inp, out):
+        # Shift range: -5 to +5 (heuristic for 30x30 grid)
+        shift_h = random.randint(-5, 5)
+        shift_w = random.randint(-5, 5)
+
+        # Pad value is 10
+        pad_val = 10
+
+        # Helper to shift a single grid
+        def shift_grid(grid, sh, sw):
+            H, W = grid.shape
+            shifted = torch.full_like(grid, pad_val)
+
+            # Source range
+            src_h_start = max(0, -sh)
+            src_h_end = min(H, H - sh)
+            src_w_start = max(0, -sw)
+            src_w_end = min(W, W - sw)
             
+            # Target range
+            dst_h_start = max(0, sh)
+            dst_h_end = min(H, H + sh)
+            dst_w_start = max(0, sw)
+            dst_w_end = min(W, W + sw)
+
+            # Check for valid slice
+            if src_h_end > src_h_start and src_w_end > src_w_start:
+                shifted[dst_h_start:dst_h_end, dst_w_start:dst_w_end] = \
+                    grid[src_h_start:src_h_end, src_w_start:src_w_end]
+
+            return shifted
+
+        inp = shift_grid(inp, shift_h, shift_w)
+        out = shift_grid(out, shift_h, shift_w)
         return inp, out
 
     def __getitem__(self, idx):
